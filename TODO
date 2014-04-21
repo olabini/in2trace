@@ -1,0 +1,3 @@
+- support restrictions on what ips and ports to use (maybe libpcap)
+- add support for batch mode (so that a parser can easily consume it)
+- look at ASN
