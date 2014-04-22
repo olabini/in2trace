@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include <pthread.h>
 #include <netdb.h>
 #include <string.h>
@@ -51,26 +53,19 @@ extern int h_errno;
 
 int threads_process(intrace_t * intrace)
 {
-    //	int err;
-    //	pthread_attr_t attr;
-    //	pthread_t t;
+    int err;
+    pthread_attr_t attr;
+    pthread_t t;
 
 	if (pthread_mutex_init(&intrace->mutex, NULL) != 0) {
 		debug_printf(dlFatal, "threads: Mutex initialization failed\n");
 		return errMutex;
 	}
 
-	/* char haddr[INET6_ADDRSTRLEN]; */
-	/* if (!inet_ntop(_IT_AF(intrace), _IT_RIP(intrace), haddr, sizeof(haddr))) { */
-	/* 	debug_printf(dlFatal, "Cannot convert IP addr to a text form\n"); */
-	/* 	return errResolve; */
-	/* } */
-
-
-	/* if ((err = listener_init(intrace)) != errNone) { */
-	/* 	debug_printf(dlFatal, "threads: Listener initialization failed, err=%d'\n", err); */
-	/* 	return err; */
-	/* } */
+	if ((err = listener_init(intrace)) != errNone) {
+		debug_printf(dlFatal, "threads: Listener initialization failed, err=%d'\n", err);
+		return err;
+	}
 
 	/* if ((err = sender_init(intrace)) != errNone) { */
 	/* 	debug_printf(dlFatal, "threads: Packet sender initialization failed, err=%d\n", err); */
@@ -82,12 +77,12 @@ int threads_process(intrace_t * intrace)
 	/* 	return err; */
 	/* } */
 
-	/* pthread_attr_init(&attr); */
-	/* pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); */
-	/* if (pthread_create(&t, &attr, listener_thr, (void *)intrace) < 0) { */
-	/* 	debug_printf(dlFatal, "threads: Cannot create listener thread\n"); */
-	/* 	return errThread; */
-	/* } */
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	if (pthread_create(&t, &attr, listener_thr, (void *)intrace) < 0) {
+		debug_printf(dlFatal, "threads: Cannot create listener thread\n");
+		return errThread;
+	}
 
 	/* pthread_attr_init(&attr); */
 	/* pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); */
@@ -96,6 +91,6 @@ int threads_process(intrace_t * intrace)
 	/* 	return errThread; */
 	/* } */
 
-	/* display_process(intrace); */
+	display_process(intrace);
 	return errNone;
 }
