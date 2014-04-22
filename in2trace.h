@@ -13,7 +13,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-typedef struct {
+typedef struct trace_entry_t {
 	uint16_t rport;
 	uint16_t lport;
 	uint32_t seq;
@@ -26,20 +26,23 @@ typedef struct {
 		struct in_addr ip_trace[MAX_HOPS + 1];
 		struct in_addr icmp_trace[MAX_HOPS + 1];
 		int16_t proto[MAX_HOPS + 1];
+		bool printed[MAX_HOPS + 1];
 	} listener;
 
+    struct trace_host_entry_t *host_entry;
     struct trace_entry_t *next;
 } trace_entry_t;
 
-typedef struct {
+typedef struct trace_host_entry_t {
 	struct in_addr rip;
 	struct in_addr lip;
-    struct trace_entry_t *traces;
+    trace_entry_t *traces;
     struct trace_host_entry_t *next;
 } trace_host_entry_t;
 
 typedef struct {
 	pthread_mutex_t mutex;
+    bool hasChange;
 
 	struct {
 		int sndSocket;

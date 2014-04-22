@@ -14,10 +14,38 @@
 
 #include <in2trace.h>
 
-int display_process(intrace_t * intrace) {
+void count_entries_in(intrace_t *intrace, int counts[]) {
+    counts[0] = 0;
+    counts[1] = 0;
+
+    trace_entry_t *current_trace;
+    trace_host_entry_t *current = intrace->traces;
+    while(current != NULL) {
+        counts[0]++;
+        current_trace = current->traces;
+        while(current_trace != NULL) {
+            counts[1]++;
+            current_trace = current_trace->next;
+        }
+        current = current->next;
+    }
+}
+
+int display_process(intrace_t *intrace) {
+    int counts[] = {0,0};
 	for (;;) {
 		/* Lock mutex */
 		while (pthread_mutex_lock(&intrace->mutex)) ;
+
+        if(intrace->hasChange) {
+            count_entries_in(intrace, counts);
+
+            printf("-----------------------------------------------------------\n");
+            printf("separate hosts: %d -> separate traces: %d\n", counts[0], counts[1]);
+            printf("\n");
+
+            intrace->hasChange = false;
+        }
 
 		/* UnLock mutex */
 		while (pthread_mutex_unlock(&intrace->mutex)) ;

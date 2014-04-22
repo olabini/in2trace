@@ -12,7 +12,7 @@
 
 #include <in2trace.h>
 
-static uint32_t listener_get_packet(intrace_t * intrace, int sock, uint8_t * buf, uint32_t buflen, struct msghdr *msg)
+static uint32_t listener_get_packet(int sock, uint8_t * buf, uint32_t buflen, struct msghdr *msg)
 {
 	bzero(msg, sizeof(struct msghdr));
 
@@ -41,7 +41,7 @@ static void listener_tcp_sock_ready(intrace_t * intrace, int sock)
 {
 	struct msghdr msg;
 	uint8_t buf[4096];
-	if (listener_get_packet(intrace, sock, buf, sizeof(buf), &msg) == 0) {
+	if (listener_get_packet(sock, buf, sizeof(buf), &msg) == 0) {
 		debug_printf(dlError, "Cannot get TCP packet\n");
 		return;
 	}
@@ -53,7 +53,7 @@ static void listener_icmp_sock_ready(intrace_t * intrace, int sock)
 {
 	struct msghdr msg;
 	uint8_t buf[4096];
-	if (listener_get_packet(intrace, sock, buf, sizeof(buf), &msg) == 0) {
+	if (listener_get_packet(sock, buf, sizeof(buf), &msg) == 0) {
 		debug_printf(dlError, "Cannot get ICMP packet\n");
 		return;
 	}

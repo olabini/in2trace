@@ -1,3 +1,5 @@
 - support restrictions on what ips and ports to use (maybe libpcap)
 - add support for batch mode (so that a parser can easily consume it)
 - look at ASN
+- Make it possible to ONLY run the listener part if wanted (passive mode)
+- Add reaping at end of Display (put a time stamp for last mtime on each thing)
