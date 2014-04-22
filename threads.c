@@ -67,10 +67,10 @@ int threads_process(intrace_t * intrace)
 		return err;
 	}
 
-	/* if ((err = sender_init(intrace)) != errNone) { */
-	/* 	debug_printf(dlFatal, "threads: Packet sender initialization failed, err=%d\n", err); */
-	/* 	return err; */
-	/* } */
+	if ((err = sender_init(intrace)) != errNone) {
+		debug_printf(dlFatal, "threads: Packet sender initialization failed, err=%d\n", err);
+		return err;
+	}
 
 	/* if ((err = threads_dropPrivs()) != errNone) { */
 	/* 	debug_printf(dlFatal, "threads: Couldn't drop privileges, err=%d\n", err); */
@@ -84,12 +84,12 @@ int threads_process(intrace_t * intrace)
 		return errThread;
 	}
 
-	/* pthread_attr_init(&attr); */
-	/* pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); */
-	/* if (pthread_create(&t, &attr, sender_thr, (void *)intrace) < 0) { */
-	/* 	debug_printf(dlFatal, "threads: Cannot create sender thread\n"); */
-	/* 	return errThread; */
-	/* } */
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	if (pthread_create(&t, &attr, sender_thr, (void *)intrace) < 0) {
+		debug_printf(dlFatal, "threads: Cannot create sender thread\n");
+		return errThread;
+	}
 
 	display_process(intrace);
 	return errNone;

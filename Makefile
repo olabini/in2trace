@@ -7,7 +7,7 @@ CFLAGS = -fPIC -O3 -g -ggdb -c -std=gnu99 -I. -pedantic \
 LD = gcc
 LDFLAGS = -fPIC -lpthread
 
-SRCS = debug.c in2trace.c threads.c listener.c display.c ipv4.c
+SRCS = debug.c in2trace.c threads.c listener.c display.c ipv4.c sender.c
 
 OBJS = $(SRCS:.c=.o)
 BIN = in2trace

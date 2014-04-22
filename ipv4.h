@@ -27,7 +27,7 @@ struct icmp4bdy {
 } __attribute__ ((__packed__));
 typedef struct icmp4bdy icmp4bdy_t;
 
-extern void ipv4_sendpkt(intrace_t * intrace, int seqSkew, int ackSkew);
+extern void ipv4_sendpkt(intrace_t * intrace, trace_entry_t *current_trace, int seq_skew, int ack_skew);
 extern void ipv4_tcp_sock_ready(intrace_t * intrace, struct msghdr *msg);
 extern void ipv4_icmp_sock_ready(intrace_t * intrace, struct msghdr *msg);
 

@@ -14,6 +14,77 @@
 
 #include <in2trace.h>
 
+static inline unsigned short ipv4_cksum_tcp(u_int16_t * h, u_int16_t * d, int dlen) {
+	unsigned int cksum;
+	unsigned short answer = 0;
+
+	cksum = h[0];
+	cksum += h[1];
+	cksum += h[2];
+	cksum += h[3];
+	cksum += h[4];
+	cksum += h[5];
+
+	cksum += d[0];
+	cksum += d[1];
+	cksum += d[2];
+	cksum += d[3];
+	cksum += d[4];
+	cksum += d[5];
+	cksum += d[6];
+	cksum += d[7];
+	cksum += d[8];
+	cksum += d[9];
+
+	dlen -= 20;
+	d += 10;
+
+	while (dlen >= 32) {
+		cksum += d[0];
+		cksum += d[1];
+		cksum += d[2];
+		cksum += d[3];
+		cksum += d[4];
+		cksum += d[5];
+		cksum += d[6];
+		cksum += d[7];
+		cksum += d[8];
+		cksum += d[9];
+		cksum += d[10];
+		cksum += d[11];
+		cksum += d[12];
+		cksum += d[13];
+		cksum += d[14];
+		cksum += d[15];
+		d += 16;
+		dlen -= 32;
+	}
+
+	while (dlen >= 8) {
+		cksum += d[0];
+		cksum += d[1];
+		cksum += d[2];
+		cksum += d[3];
+		d += 4;
+		dlen -= 8;
+	}
+
+	while (dlen > 1) {
+		cksum += *d++;
+		dlen -= 2;
+	}
+
+	if (dlen == 1) {
+		*(unsigned char *)(&answer) = (*(unsigned char *)d);
+		cksum += answer;
+	}
+
+	cksum = (cksum >> 16) + (cksum & 0x0000ffff);
+	cksum += (cksum >> 16);
+
+	return (unsigned short)(~cksum);
+}
+
 static inline int ipv4_check_tcp(ip4pkt_t * pkt, uint32_t pktlen) {
 	if (pktlen < sizeof(struct ip)) {
 		return errPkt;
@@ -53,6 +124,7 @@ trace_entry_t *create_trace_entry(trace_host_entry_t *host_entry, uint32_t seq) 
     created->seq = seq;
     created->next = host_entry->traces;
     created->host_entry = host_entry;
+    created->last_touch = time(NULL);
     host_entry->traces = created;
     return created;
 }
@@ -89,9 +161,19 @@ trace_entry_t *create_or_find_trace(intrace_t *intrace, struct in_addr *src, uin
     return find_or_create_trace_entry(hentry, seq);
 }
 
-bool should_process_packet(intrace_t *intrace, struct tcphdr *tcph) {
+bool is_local(in_addr_t addr) {
+    return addr == 1331776701;
+}
+
+bool should_process_packet(intrace_t *intrace, struct tcphdr *tcph, ip4pkt_t *pkt) {
     // here we can restrict based on port or ip number for example
-    return true;
+
+    if(is_local(pkt->iph.ip_dst.s_addr) &&
+       is_local(pkt->iph.ip_src.s_addr)) {
+        return false;
+    } else {
+        return true;
+    }
 }
 
 bool is_ack(trace_entry_t *trace, struct tcphdr *tcph) {
@@ -115,8 +197,8 @@ bool is_rst(trace_entry_t *trace, struct tcphdr *tcph, ip4pkt_t *pkt) {
 
 void process_ack(trace_entry_t *trace, ip4pkt_t *pkt) {
     int hop = trace->cnt - 1;
+    trace->last_touch = time(NULL);
     trace->listener.proto[hop] = IPPROTO_TCP;
-    trace->listener.printed[hop] = false;
     memcpy(&trace->listener.ip_trace[hop].s_addr, &pkt->iph.ip_src, sizeof(pkt->iph.ip_src));
     trace->maxhop = hop;
     trace->cnt = MAX_HOPS;
@@ -124,8 +206,8 @@ void process_ack(trace_entry_t *trace, ip4pkt_t *pkt) {
 
 void process_rst(trace_entry_t *trace, ip4pkt_t *pkt) {
     int hop = trace->cnt - 1;
+    trace->last_touch = time(NULL);
     memcpy(&trace->listener.ip_trace[hop].s_addr, &pkt->iph.ip_src, sizeof(pkt->iph.ip_src));
-    trace->listener.printed[hop] = false;
     trace->listener.proto[hop] = -1;
     trace->maxhop = hop;
     trace->cnt = MAX_HOPS;
@@ -134,6 +216,7 @@ void process_rst(trace_entry_t *trace, ip4pkt_t *pkt) {
 
 void process_regular_packet(trace_entry_t *trace, struct tcphdr *tcph, ip4pkt_t *pkt) {
     memcpy(&trace->host_entry->lip, &pkt->iph.ip_dst, sizeof(pkt->iph.ip_dst));
+    trace->last_touch = time(NULL);
     trace->rport = ntohs(tcph->th_sport);
     trace->lport = ntohs(tcph->th_dport);
     if (ntohl(tcph->th_seq)) {
@@ -153,6 +236,59 @@ struct tcphdr *tcp_header_from(struct msghdr *msg) {
     return (struct tcphdr *)((uint8_t *) & pkt->iph + ((uint32_t) pkt->iph.ip_hl * 4));
 }
 
+
+void ipv4_sendpkt(intrace_t * intrace, trace_entry_t *current_trace, int seq_skew, int ack_skew) {
+	tcppkt4_t pkt;
+	uint16_t pktSz = sizeof(pkt) - MAX_PAYL_SZ + 1;
+
+	struct sockaddr_in raddr;
+	struct {
+		uint32_t saddr;
+		uint32_t daddr;
+		uint8_t zero;
+		uint8_t protocol;
+		uint16_t tcp_len;
+	} __attribute__ ((__packed__)) pseudoh;
+
+	raddr.sin_family = AF_INET;
+	raddr.sin_port = htons(current_trace->rport);
+	memcpy(&raddr.sin_addr.s_addr, &current_trace->host_entry->rip.s_addr, sizeof(raddr.sin_addr.s_addr));
+
+	bzero(&pkt, pktSz);
+
+	pkt.iph.ip_v = 0x4;
+	pkt.iph.ip_hl = sizeof(pkt.iph) / 4;
+	pkt.iph.ip_len = htons(pktSz);
+	pkt.iph.ip_id = htons(current_trace->cnt);
+	pkt.iph.ip_off = htons(IP_DF | (0 & IP_OFFMASK));
+	pkt.iph.ip_ttl = current_trace->cnt;
+	pkt.iph.ip_p = IPPROTO_TCP;
+	memcpy(&pkt.iph.ip_src, &current_trace->host_entry->lip.s_addr, sizeof(pkt.iph.ip_src));
+	memcpy(&pkt.iph.ip_dst, &current_trace->host_entry->rip.s_addr, sizeof(pkt.iph.ip_dst));
+
+	pkt.tcph.th_sport = htons(current_trace->lport);
+	pkt.tcph.th_dport = htons(current_trace->rport);
+	pkt.tcph.th_seq = htonl(current_trace->ack + seq_skew);
+	pkt.tcph.th_ack = htonl(current_trace->seq + ack_skew);
+	pkt.tcph.th_off = sizeof(pkt.tcph) / 4;
+	pkt.tcph.th_flags = TH_ACK | TH_PUSH;
+	pkt.tcph.th_win = htons(0xFFFF);
+	pkt.tcph.th_urp = htons(0x0);
+
+	memset(&pkt.payload, '\0', 1);
+
+	uint16_t l4len = pktSz - sizeof(pkt.iph);
+	pseudoh.saddr = pkt.iph.ip_src.s_addr;
+	pseudoh.daddr = pkt.iph.ip_dst.s_addr;
+	pseudoh.zero = 0x0;
+	pseudoh.protocol = pkt.iph.ip_p;
+	pseudoh.tcp_len = htons(l4len);
+
+	pkt.tcph.th_sum = ipv4_cksum_tcp((u_int16_t *) & pseudoh, (u_int16_t *) & pkt.tcph, l4len);
+
+	sendto(intrace->sender.sndSocket, &pkt, pktSz, MSG_NOSIGNAL, (struct sockaddr *)&raddr, sizeof(struct sockaddr));
+}
+
 void ipv4_tcp_sock_ready(intrace_t *intrace, struct msghdr *msg) {
 	ip4pkt_t *pkt = msg->msg_iov->iov_base;
     struct tcphdr *tcph = tcp_header_from(msg);
@@ -160,7 +296,7 @@ void ipv4_tcp_sock_ready(intrace_t *intrace, struct msghdr *msg) {
 		return;
     }
 
-    if(should_process_packet(intrace, tcph)) {
+    if(should_process_packet(intrace, tcph, pkt)) {
         while (pthread_mutex_lock(&intrace->mutex)) ;
 
         intrace->hasChange = true;

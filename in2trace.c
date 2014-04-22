@@ -41,5 +41,8 @@ int main(int argc, char **argv)
 		return err;
 	}
 
+    //    intrace.display_function = display_process_counter;
+    intrace.display_function = display_process_traces;
+
 	return threads_process(&intrace);
 }

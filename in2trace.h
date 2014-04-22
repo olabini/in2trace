@@ -12,12 +12,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 typedef struct trace_entry_t {
 	uint16_t rport;
 	uint16_t lport;
 	uint32_t seq;
 	uint32_t ack;
+    time_t last_touch;
 
 	int maxhop;
 	int cnt;
@@ -26,7 +28,6 @@ typedef struct trace_entry_t {
 		struct in_addr ip_trace[MAX_HOPS + 1];
 		struct in_addr icmp_trace[MAX_HOPS + 1];
 		int16_t proto[MAX_HOPS + 1];
-		bool printed[MAX_HOPS + 1];
 	} listener;
 
     struct trace_host_entry_t *host_entry;
@@ -40,9 +41,10 @@ typedef struct trace_host_entry_t {
     struct trace_host_entry_t *next;
 } trace_host_entry_t;
 
-typedef struct {
+typedef struct intrace_t {
 	pthread_mutex_t mutex;
     bool hasChange;
+    void (*display_function)(void *);
 
 	struct {
 		int sndSocket;
